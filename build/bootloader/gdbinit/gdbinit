@@ -1,0 +1,2 @@
+source /home/georgekirby/BLE_Test/build/bootloader/gdbinit/symbols
+source /home/georgekirby/BLE_Test/build/bootloader/gdbinit/connect
