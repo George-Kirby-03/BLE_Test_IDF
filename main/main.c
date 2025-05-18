@@ -8,6 +8,7 @@
 #include "gap.h"
 #include "gatt_svc.h"
 #include "heart_rate.h"
+#include "esp_mac.h"
 #include "led.h"
 
 /* Library function declarations */
