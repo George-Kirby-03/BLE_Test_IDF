@@ -10,6 +10,9 @@
 #include "heart_rate.h"
 #include "esp_mac.h"
 #include "led.h"
+#include "can.h"
+
+extern byte_val air_temp;
 
 /* Library function declarations */
 void ble_store_config_init(void);
@@ -65,19 +68,23 @@ static void heart_rate_task(void *param) {
     /* Loop forever */
     while (1) {
         /* Update heart rate value every 1 second */
-        update_heart_rate();
+        // update_heart_rate();
+        get_air_temp(&air_temp);
        // ESP_LOGI(TAG, "heart rate updated to %d", get_heart_rate());
-
         /* Send heart rate indication if enabled  (its a notification hereeee)*/ 
         send_heart_rate_indication();
-
+        printf("Air Temperature: %d°C\n", air_temp.data.signed_data);
         /* Sleep */
-        vTaskDelay(10 / portTICK_PERIOD_MS);
+        vTaskDelay(25 / portTICK_PERIOD_MS);
     }
 
     /* Clean up at exit */
     vTaskDelete(NULL);
 }
+
+twai_general_config_t g_config = TWAI_GENERAL_CONFIG_DEFAULT(GPIO_NUM_21, GPIO_NUM_22, TWAI_MODE_NORMAL);
+twai_timing_config_t t_config = TWAI_TIMING_CONFIG_500KBITS();
+twai_filter_config_t f_config = TWAI_FILTER_CONFIG_ACCEPT_ALL();
 
 void app_main(void) {
     /* Local variables */
@@ -86,7 +93,20 @@ void app_main(void) {
 
     /* LED initialization */
     led_init();
+    if (twai_driver_install(&g_config, &t_config, &f_config) == ESP_OK) {
+        printf("Driver installed\n");
+    } else {
+        printf("Failed to install driver\n");
+        return;
+    }
 
+    // Start TWAI driver
+    if (twai_start() == ESP_OK) {
+        printf("Driver started\n");
+    } else {
+        printf("Failed to start driver\n");
+        return;
+    }
     /*
      * NVS flash initialization
      * Dependency of BLE stack to store configurations

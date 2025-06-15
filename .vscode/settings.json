@@ -1,3 +1,9 @@
 {
-  "C_Cpp.intelliSenseEngine": "default"
+  "C_Cpp.intelliSenseEngine": "default",
+  "files.associations": {
+    "heart_rate.h": "c",
+    "xutility": "c"
+  },
+  "idf.flashType": "UART",
+  "idf.portWin": "COM4"
 }
