@@ -2,8 +2,20 @@
   "C_Cpp.intelliSenseEngine": "default",
   "files.associations": {
     "heart_rate.h": "c",
-    "xutility": "c"
+    "xutility": "c",
+    "funcpid.h": "c",
+    "algorithm": "c",
+    "atomic": "c",
+    "compare": "c",
+    "concepts": "c",
+    "new": "c",
+    "optional": "c",
+    "tuple": "c",
+    "type_traits": "c",
+    "utility": "c",
+    "xmemory": "c",
+    "xtr1common": "c"
   },
   "idf.flashType": "UART",
-  "idf.portWin": "COM4"
+  "idf.portWin": "COM7"
 }

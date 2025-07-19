@@ -8,15 +8,8 @@
 #include "common.h"
 #include "heart_rate.h"
 #include "led.h"
-#include "can.h"
+#include "canPID.h"
 
-/* External CAN structs */
-byte_val air_temp = {
-    .tx_msg = CAN_PID_SENSOR_SETUP_STANDARD,
-    .tx_msg.data = {0x02, 0x01, 0x05, 0x55, 0x55, 0x55, 0x55, 0x55}, // Request for air temperature
-    .rx_msg = {{{0}}},
-    .data = {0} 
-};
 
 /* Private function declarations */
 static int heart_rate_chr_access(uint16_t conn_handle, uint16_t attr_handle,
@@ -31,12 +24,12 @@ static const ble_uuid128_t heart_rate_svc_uuid = BLE_UUID128_INIT(0xf0, 0xde, 0x
                      0x78, 0x56, 0x34, 0x12, 0xab, 0xcd, 0x00); // LSB first
 
 static uint8_t heart_rate_chr_val[2] = {0};
-static uint16_t heart_rate_chr_val_handle;
-static const ble_uuid128_t heart_rate_chr_uuid =  BLE_UUID128_INIT(0xf2, 0xde, 0xbc, 0x9a, 0x78, 0x56, 0x34, 0x12,
-                     0x78, 0x56, 0x34, 0x12, 0xab, 0xcd, 0x00);
+static uint16_t *heart_rate_chr_val_handle;
+// static const ble_uuid128_t heart_rate_chr_uuid =  BLE_UUID128_INIT(0xf2, 0xde, 0xbc, 0x9a, 0x78, 0x56, 0x34, 0x12,
+ //                    0x78, 0x56, 0x34, 0x12, 0xab, 0xcd, 0x00);
 
 
-
+static uint16_t pid_attr_handle;
 static uint16_t heart_rate_chr_conn_handle = 0;
 static bool heart_rate_chr_conn_handle_inited = false;
 static bool heart_rate_notifiy_status = false;
@@ -51,19 +44,61 @@ static const ble_uuid128_t led_chr_uuid =
 
 
 /* GATT services table */
-static const struct ble_gatt_svc_def gatt_svr_svcs[] = {
+
+
+/* Get PID_lists*/
+static uint8_t list_size;
+static PID_data **pid_list = NULL;
+
+esp_err_t BLE_pass_PID(PID_data ***can_pid_list, uint8_t can_list_size){
+    list_size = can_list_size;
+    pid_list = *can_pid_list;
+    return ESP_OK;
+}
+
+static struct ble_gatt_chr_def* uids = NULL;
+uint8_t *indexes = NULL;
+
+esp_err_t gen_func(void){
+    struct ble_gatt_chr_def *chr_list = malloc((list_size + 1) * sizeof(struct ble_gatt_chr_def));
+    heart_rate_chr_val_handle = malloc((list_size + 1) * sizeof(uint16_t));
+   // indexes = malloc(list_size * sizeof(uint8_t));
+    heart_rate_chr_val_handle[list_size] = 0;    
+    if (chr_list == NULL) {
+        ESP_LOGE("gen_func", "Failed to allocate memory for characteristic list.");
+        return ESP_FAIL;
+    }
+
+    for (uint8_t i = 0; i < list_size; i++) {
+       // ble_uuid16_t uuid = BLE_UUID16_INIT((*list)[i]->PID_index);
+        ble_uuid16_t *uuid = malloc(sizeof(ble_uuid16_t));
+        if (uuid == NULL) {
+            ESP_LOGE("gen_func", "Failed to allocate memory for UUID.");
+            free(chr_list);  
+            return ESP_FAIL;
+        }
+        memcpy(uuid, &(ble_uuid16_t)BLE_UUID16_INIT((pid_list)[i]->PID_index), sizeof(ble_uuid16_t));
+        chr_list[i] = (struct ble_gatt_chr_def){
+            .uuid = &uuid->u,
+            .access_cb = heart_rate_chr_access,
+            .arg = (void*)i,
+            .flags = BLE_GATT_CHR_F_READ | BLE_GATT_CHR_F_NOTIFY,
+            .min_key_size = 0,
+            .val_handle = &heart_rate_chr_val_handle[i],
+            .cpfd = NULL
+        };
+    }
+    chr_list[list_size] = (struct ble_gatt_chr_def){0}; // Null-terminate the list
+    uids = chr_list;
+    return ESP_OK;
+}
+
+
+static struct ble_gatt_svc_def gatt_svr_svcs[] = {
     {
         .type = BLE_GATT_SVC_TYPE_PRIMARY,
         .uuid = &heart_rate_svc_uuid.u,
-        .characteristics = (struct ble_gatt_chr_def[]) {
-            {
-                .uuid = &heart_rate_chr_uuid.u,
-                .access_cb = heart_rate_chr_access,
-                .flags = BLE_GATT_CHR_F_READ | BLE_GATT_CHR_F_NOTIFY,
-                .val_handle = &heart_rate_chr_val_handle
-            },
-            {0}
-        }
+        .characteristics = NULL,
     },
     {
         .type = BLE_GATT_SVC_TYPE_PRIMARY,
@@ -75,14 +110,12 @@ static const struct ble_gatt_svc_def gatt_svr_svcs[] = {
                 .flags = BLE_GATT_CHR_F_WRITE,
                 .val_handle = &led_chr_val_handle
             },
+
             {0}
         }
     },
     {0}
 };
-
- 
-
 
 
 
@@ -91,7 +124,7 @@ static int heart_rate_chr_access(uint16_t conn_handle, uint16_t attr_handle,
                                  struct ble_gatt_access_ctxt *ctxt, void *arg) {
     /* Local variables */
     int rc;
-
+                                    
     /* Handle access events */
     /* Note: Heart rate characteristic is read only */
     switch (ctxt->op) {
@@ -108,12 +141,37 @@ static int heart_rate_chr_access(uint16_t conn_handle, uint16_t attr_handle,
         }
 
         /* Verify attribute handle */
-        if (attr_handle == heart_rate_chr_val_handle) {
-            /* Update access buffer value */
-            rc = os_mbuf_append(ctxt->om, &air_temp.data.signed_data,
-                                sizeof(air_temp.data.signed_data));
-            return rc == 0 ? 0 : BLE_ATT_ERR_INSUFFICIENT_RES;
+        uint8_t inc = 0;
+        while(1)
+        {   
+            if(heart_rate_chr_val_handle[inc] == attr_handle){
+                break;
+               }
+            else if(heart_rate_chr_val_handle[inc] == 0){
+                return BLE_ATT_ERR_ATTR_NOT_FOUND;
+            }
+            else{
+              inc ++;
+            }
         }
+
+        uint8_t index = (uint8_t)arg;
+        switch (pid_list[index]->is_float)
+        {
+        case 1:
+            rc = os_mbuf_append(ctxt->om, &pid_list[index]->f_data,
+                                sizeof(&pid_list[index]->f_data));
+            return rc == 0 ? 0 : BLE_ATT_ERR_INSUFFICIENT_RES;
+            break;
+        
+        case 0:
+             rc = os_mbuf_append(ctxt->om, &pid_list[index]->i_data,
+                                sizeof(&pid_list[index]->i_data));
+            return rc == 0 ? 0 : BLE_ATT_ERR_INSUFFICIENT_RES;
+            break;
+        }
+        
+
         goto error;
 
     /* Unknown event */
@@ -184,7 +242,7 @@ error:
 /* Public functions */
 void send_heart_rate_indication(void) {
     if (heart_rate_notifiy_status && heart_rate_chr_conn_handle_inited) {
-        int rc = ble_gatts_notify(heart_rate_chr_conn_handle,heart_rate_chr_val_handle);
+        int rc = ble_gatts_notify(heart_rate_chr_conn_handle,pid_attr_handle);
 if (rc != 0) {
     ESP_LOGW("HRM", "Notify failed: %d", rc);
 }
@@ -252,13 +310,14 @@ void gatt_svr_subscribe_cb(struct ble_gap_event *event) {
     }
 
     /* Check attribute handle */
-    if (event->subscribe.attr_handle == heart_rate_chr_val_handle) {
+ //   if (event->subscribe.attr_handle == heart_rate_chr_val_handle) {
         /* Update heart rate subscription status */
+        pid_attr_handle = event->subscribe.attr_handle;
         heart_rate_chr_conn_handle = event->subscribe.conn_handle;
         heart_rate_chr_conn_handle_inited = true;
         heart_rate_ind_status = event->subscribe.cur_indicate;
         heart_rate_notifiy_status = event->subscribe.cur_notify;
-    }
+  //  }
      
 }
 
@@ -271,6 +330,9 @@ void gatt_svr_subscribe_cb(struct ble_gap_event *event) {
 int gatt_svc_init(void) {
     /* Local variables */
     int rc;
+
+    /* Adding charactersitcs to svc struct*/
+    gatt_svr_svcs[0].characteristics = uids;
 
     /* 1. GATT service initialization */
     ble_svc_gatt_init();
