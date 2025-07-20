@@ -33,7 +33,7 @@
     .PID_index = PID, \
     .f_gen_func = NULL,  \
     .is_available = 1, \
-    .is_float = 0, 
+    .is_float = 1, 
     
 #define CAN_PID_REQUEST(pid_to_request) (uint8_t[]){0x02, 0x01, pid_to_request, 0x55, 0x55, 0x55, 0x55, 0x55} 
 #define CAN_PID_LIST_INT(pid, function, id_name) { .name = id_name, .i_data = 0.0f, .PID_index = pid, .i_gen_func = function, .is_available = 1, .is_float = 0, }

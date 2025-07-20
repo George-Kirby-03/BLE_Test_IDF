@@ -141,6 +141,7 @@ static int heart_rate_chr_access(uint16_t conn_handle, uint16_t attr_handle,
         }
 
         /* Verify attribute handle */
+        /*
         uint8_t inc = 0;
         while(1)
         {   
@@ -153,20 +154,27 @@ static int heart_rate_chr_access(uint16_t conn_handle, uint16_t attr_handle,
             else{
               inc ++;
             }
-        }
+        } */
 
         uint8_t index = (uint8_t)arg;
+        ESP_LOGI(TAG, "sENDING DATA of PID=%d value=%f",
+                     pid_list[index]->PID_index, pid_list[index]->f_data);
+
+        int data = (int)pid_list[index]->f_data;             
+        ESP_LOGI(TAG, "Data=%d size=%d float? %d",
+                     data, sizeof(data), pid_list[index]->is_float );
         switch (pid_list[index]->is_float)
         {
         case 1:
-            rc = os_mbuf_append(ctxt->om, &pid_list[index]->f_data,
-                                sizeof(&pid_list[index]->f_data));
+            
+            rc = os_mbuf_append(ctxt->om, &data,
+                                sizeof(data));
             return rc == 0 ? 0 : BLE_ATT_ERR_INSUFFICIENT_RES;
             break;
         
         case 0:
              rc = os_mbuf_append(ctxt->om, &pid_list[index]->i_data,
-                                sizeof(&pid_list[index]->i_data));
+                                sizeof(pid_list[index]->i_data));
             return rc == 0 ? 0 : BLE_ATT_ERR_INSUFFICIENT_RES;
             break;
         }
@@ -247,7 +255,18 @@ if (rc != 0) {
     ESP_LOGW("HRM", "Notify failed: %d", rc);
 }
 
-       // ESP_LOGI(TAG, "heart rate notifiaction sent!");
+        ESP_LOGI(TAG, "heart rate notifiaction sent!, PID: %d", pid_attr_handle);
+    }
+}
+
+void send_heart_rate_indication(void) {
+    if (heart_rate_notifiy_status && heart_rate_chr_conn_handle_inited) {
+        int rc = ble_gatts_notify(heart_rate_chr_conn_handle,pid_attr_handle);
+if (rc != 0) {
+    ESP_LOGW("HRM", "Notify failed: %d", rc);
+}
+
+        ESP_LOGI(TAG, "heart rate notifiaction sent!, PID: %d", pid_attr_handle);
     }
 }
 
@@ -305,10 +324,9 @@ void gatt_svr_subscribe_cb(struct ble_gap_event *event) {
         ESP_LOGI(TAG, "subscribe event; conn_handle=%d attr_handle=%d",
                  event->subscribe.conn_handle, event->subscribe.attr_handle);
     } else {
-        ESP_LOGI(TAG, "subscribe by nimble stack; attr_handle=%d",
+        ESP_LOGI(TAG, "subscribe 76by nimble stack; attr_handle=%d",
                  event->subscribe.attr_handle);
     }
-
     /* Check attribute handle */
  //   if (event->subscribe.attr_handle == heart_rate_chr_val_handle) {
         /* Update heart rate subscription status */

@@ -242,10 +242,15 @@ esp_err_t CAN_loop(CAN_Data_handler *car_settings, PID_data ***pid_list, uint8_t
             }
         }
         else {
+            if (car_settings->receiver_node.data[0] > 2){
             for (uint8_t j = 0; j < car_settings->receiver_node.data[0]-2 ; j++) {
                 (*pid_list)[i]->f_data += car_settings->receiver_node.data[j + 3];  // Copy the data directly if no gen_func is defined
             }
-            
+        }
+        else{
+            ESP_LOGE("Can loop", "Pid has no return bytes (setting to 00)");
+            (*pid_list)[i]->f_data = 0.0f;
+        }
         }
     }
 }

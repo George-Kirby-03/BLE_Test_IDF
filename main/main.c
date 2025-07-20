@@ -110,6 +110,7 @@ static void heart_rate_task(void *param) {
         ESP_LOGE("app_main", "CAN loop failed");
         break;
     }
+        CAN_print_all_pids(&pid_list, list_size);
        // ESP_LOGI(TAG, "heart rate updated to %d", get_heart_rate());
         /* Send heart rate indication if enabled  (its a notification hereeee)*/ 
         send_heart_rate_indication();
@@ -192,7 +193,7 @@ void app_main(void) {
     nimble_host_config_init();
 
     /* Start NimBLE host task thread and return */
-    xTaskCreatePinnedToCore(nimble_host_task, "NimBLE Host", 4*1024, NULL, 5, NULL, 1);
+    xTaskCreatePinnedToCore(nimble_host_task, "NimBLE Host", 5*1024, NULL, 5, NULL, 1);
     xTaskCreatePinnedToCore(heart_rate_task, "Heart Rate", 4*1024, NULL, 5, NULL, 0);
     return;
 }
