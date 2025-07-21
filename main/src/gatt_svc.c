@@ -259,16 +259,6 @@ if (rc != 0) {
     }
 }
 
-void send_heart_rate_indication(void) {
-    if (heart_rate_notifiy_status && heart_rate_chr_conn_handle_inited) {
-        int rc = ble_gatts_notify(heart_rate_chr_conn_handle,pid_attr_handle);
-if (rc != 0) {
-    ESP_LOGW("HRM", "Notify failed: %d", rc);
-}
-
-        ESP_LOGI(TAG, "heart rate notifiaction sent!, PID: %d", pid_attr_handle);
-    }
-}
 
 /*
  *  Handle GATT attribute register events
