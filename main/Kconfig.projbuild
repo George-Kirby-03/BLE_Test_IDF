@@ -1,20 +1,16 @@
-menu "Example Configuration"
+menu "CAN_BUS_BLE"
 
     orsource "$IDF_PATH/examples/common_components/env_caps/$IDF_TARGET/Kconfig.env_caps"
+   
 
-    choice BLINK_LED
-        prompt "Blink LED type"
-        default BLINK_LED_GPIO
-        help
-            Select the LED type. A normal level controlled LED or an addressable LED strip.
-            The default selection is based on the Espressif DevKit boards.
-            You can change the default selection according to your board.
+config BLE_NAME
+    string "String for my macro"
+    default "eps32_ble"
+    help
+        Enter a string value that will be available as a macro in your C files.
+        Example: MY_STRING_MACRO = "HelloWorld"
 
-        config BLINK_LED_GPIO
-            bool "GPIO"
-        config BLINK_LED_STRIP
-            bool "LED strip"
-    endchoice
+
 
     choice BLINK_LED_STRIP_BACKEND
         depends on BLINK_LED_STRIP

@@ -78,24 +78,21 @@ esp_err_t CAN_init(CAN_Data_handler *car_settings, twai_timing_config_t *t_confi
     };
     car_settings->is_extended = 0; // Default to standard frame format
 
-
     uint32_t alerts;
     uint32_t alerts_to_enable = TWAI_ALERT_TX_SUCCESS | TWAI_ALERT_TX_FAILED;
    
-
-    
     for (uint8_t i = 0; i < 2; i++) {
 
        if (twai_driver_install(general_config, t_config, &filter_config[i]) != ESP_OK) {
         ESP_LOGE("CAN_init", "Failed to install TWAI driver.");
-        return ESP_FAIL;
+        break;
          }
         else { 
             if (twai_reconfigure_alerts(alerts_to_enable, NULL) == ESP_OK) {
         ESP_LOGI("CAN_init(alert reconfig)", "Alerts reconfigured");
             } else {
         ESP_LOGE("CAN_init(alert reconfig)", "Failed to reconfigure alerts");
-        return ESP_FAIL;
+        break;;
         }
         twai_start();
         }
@@ -110,7 +107,7 @@ esp_err_t CAN_init(CAN_Data_handler *car_settings, twai_timing_config_t *t_confi
                                break;
                         }
                         else if (i == 0)  {
-                            ESP_LOGE("CAN_init", "Failed to receive message back, TRYING 11bit ID");
+                            ESP_LOGI("CAN_init", "Failed to receive message back, TRYING 11bit ID");
                         }             
                         else {
                             ESP_LOGE("CAN_init", "Failed to receive on both attempts, stopping TWAI driver");
@@ -118,28 +115,28 @@ esp_err_t CAN_init(CAN_Data_handler *car_settings, twai_timing_config_t *t_confi
                    }   
                     else {
                         ESP_LOGE("CAN_init", "Message transmission failed");
-                        return ESP_FAIL;
+                        break;
                     }
                 }
             
                 else if ((res == ESP_ERR_TIMEOUT) && (i == 0)) {
-                  ESP_LOGE("CAN_init", "Timeout while sending message (likely no other device awk), TRYING 11bit ID");
+                  ESP_LOGE("CAN_init", "Timeout while sending message (likely no other device ak), TRYING 11bit ID anyway" );
                 } 
                 
                 else if (res == ESP_ERR_TIMEOUT) {
                     ESP_LOGE("CAN_init", "Timeout while sending message on both attempts");
-                    return ESP_FAIL;  // Return failure if unable to send message
+                    break;  // Return failure if unable to send message
                 }
 
                 else {
                     ESP_LOGE("CAN_init", "Error on trasmissions: %s", esp_err_to_name(res));
-                    return res;  // Return the error if reading alerts fails
+                    break;  // Return the error if reading alerts fails
                 }
                 
             }
             else {
                 ESP_LOGE("CAN_init", "Failed to qeue message");
-                return ESP_FAIL;
+                break;
             }
 
             if (twai_stop() == ESP_OK) {
@@ -149,13 +146,12 @@ esp_err_t CAN_init(CAN_Data_handler *car_settings, twai_timing_config_t *t_confi
     }
         
 if (car_settings->is_set == 0) {
-    ESP_LOGE("CAN_init", "Failed to set up CAN bus after two attempts.");
+    ESP_LOGE("CAN_init", "Failed to set up CAN bus, teminating program");
     twai_driver_uninstall();  // Uninstall the TWAI driver if setup fails
     return ESP_FAIL;  // Return failure if unable to set up CAN bus
 }
 else {
 car_settings->is_extended = car_settings->sender_node.extd; // Set the is_extended flag based on the message format
-car_settings->is_extended = car_settings->sender_node.extd;
 ESP_LOGI("CAN_init", "YAYYY, CAN bus initialized successfully with %s frame format", car_settings->is_extended ? "extended" : "standard");
 }
 return ESP_OK;

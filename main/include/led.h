@@ -9,7 +9,6 @@
 /* Includes */
 /* ESP APIs */
 #include "driver/gpio.h"
-#include "led_strip.h"
 #include "sdkconfig.h"
 
 /* Defines */

@@ -315,11 +315,11 @@ int gap_init(void)
     ble_svc_gap_init();
 
     /* Set GAP device name */
-    rc = ble_svc_gap_device_name_set(DEVICE_NAME);
+    rc = ble_svc_gap_device_name_set(CONFIG_BLE_NAME);
     if (rc != 0)
     {
         ESP_LOGE(TAG, "failed to set device name to %s, error code: %d",
-                 DEVICE_NAME, rc);
+                 CONFIG_BLE_NAME, rc);
         return rc;
     }
     return rc;

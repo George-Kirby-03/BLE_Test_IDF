@@ -18,6 +18,7 @@
 #include "nvs_flash.h"
 #include "sdkconfig.h"
 
+
 /* FreeRTOS APIs */
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
@@ -33,5 +34,6 @@
 /* Defines */
 #define TAG "NimBLE_GATT_Server"
 #define DEVICE_NAME "NimBLE_GATT"
+
 
 #endif // COMMON_H

@@ -79,6 +79,26 @@ extern twai_general_config_t can_pid_general_config[];
 
 
 esp_err_t CAN_init(CAN_Data_handler *car_settings, twai_timing_config_t *t_config, const twai_filter_config_t *filter_config, twai_general_config_t *general_config);
+
+/**
+ * @brief Initilize the TWAI driver and Car handler with the given configurations.
+ *
+ * @note FF
+ *
+ * @param[in] handle  TWAI driver handle returned by `twai_driver_install_v2`
+ * @param[in] message Message to transmit
+ * @param[in] ticks_to_wait   Number of FreeRTOS ticks to block on the TX queue
+ *
+ * @return
+ *      - ESP_OK: Transmission successfully queued/initiated
+ *      - ESP_ERR_INVALID_ARG: Arguments are invalid
+ *      - ESP_ERR_TIMEOUT: Timed out waiting for space on TX queue
+ *      - ESP_FAIL: TX queue is disabled and another message is currently transmitting
+ *      - ESP_ERR_INVALID_STATE: TWAI driver is not in running state, or is not installed
+ *      - ESP_ERR_NOT_SUPPORTED: Listen Only Mode does not support transmissions
+ */
+
+
 esp_err_t CAN_request(CAN_Data_handler *car_settings, uint8_t *data_send, uint8_t *data_expected, uint8_t mask_size, uint64_t mask, TickType_t timeout);
 esp_err_t PID_data_init(PID_data *programed_pids, PID_data ***pid_list, uint8_t *list_size, CAN_Data_handler *car_settings);
 esp_err_t CAN_request_pid(CAN_Data_handler *car_settings, PID_data *element, TickType_t timeout);
