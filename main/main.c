@@ -106,14 +106,13 @@ static void heart_rate_task(void *param) {
     while (1) {
         /* Update heart rate value every 1 second */
         // update_heart_rate();
-         if (CAN_loop(&car_settings, &pid_list, list_size) != ESP_OK) {
+         if (CAN_loop(&car_settings, &pid_list, list_size, BLE_send_PID_notification) != ESP_OK) {
         ESP_LOGE("app_main", "CAN loop failed");
         break;
     }
         CAN_print_all_pids(&pid_list, list_size);
        // ESP_LOGI(TAG, "heart rate updated to %d", get_heart_rate());
         /* Send heart rate indication if enabled  (its a notification hereeee)*/ 
-        send_heart_rate_indication();
      
         /* Sleep */
         vTaskDelay(pdMS_TO_TICKS(100));
@@ -128,7 +127,6 @@ void app_main(void) {
     /* Local variables */
     int rc;
     esp_err_t ret;
-
     /* Start CAN*/
     if (CAN_init(&car_settings, &t_config, can_pid_filters, &pid_general_config) == ESP_OK) {
         printf("Driver installed\n");

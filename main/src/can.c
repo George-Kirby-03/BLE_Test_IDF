@@ -1,7 +1,7 @@
 #include <canPID.h>
 #include <common.h>
 
-
+#include <stdint.h>
 
 
 esp_err_t CAN_request(CAN_Data_handler *car_settings, uint8_t *data_send, uint8_t *data_expected, uint8_t mask_size, uint64_t mask, TickType_t timeout) {
@@ -70,8 +70,6 @@ esp_err_t CAN_request_pid(CAN_Data_handler *car_settings, PID_data *element, Tic
 esp_err_t CAN_init(CAN_Data_handler *car_settings, twai_timing_config_t *t_config, const twai_filter_config_t *filter_config, twai_general_config_t *general_config)
 {
    
-
-
     (*car_settings).sender_node = (twai_message_t){
         CAN_PID_SENSOR_SETUP_STANDARD
         .data = {0x02, 0x01, 0x00, 0x55, 0x55, 0x55, 0x55, 0x55}
@@ -210,7 +208,9 @@ esp_err_t PID_data_init(PID_data *programed_pids, PID_data ***pid_list, uint8_t 
     return ESP_OK;
 }
 
-esp_err_t CAN_loop(CAN_Data_handler *car_settings, PID_data ***pid_list, uint8_t pid_list_count) {
+
+
+esp_err_t CAN_loop(CAN_Data_handler *car_settings, PID_data ***pid_list, uint8_t pid_list_count, completed_read_func func_caller) {
     if (car_settings == NULL || pid_list == NULL || pid_list_count == 0) {
         ESP_LOGE("CAN_loop", "Invalid parameters: car_settings or pid_list is NULL.");
         return ESP_ERR_INVALID_ARG;
@@ -220,11 +220,14 @@ esp_err_t CAN_loop(CAN_Data_handler *car_settings, PID_data ***pid_list, uint8_t
         // Request the PID data
         if (CAN_request_pid(car_settings, ((*pid_list)[i]), pdMS_TO_TICKS(3000)) != ESP_OK) {
             ESP_LOGE("CAN_loop", "Failed to request PID %d data.", (*pid_list)[i]->PID_index);
-            (*pid_list)[i]->f_data = 3.0f;
+           // (*pid_list)[i]->f_data = 3.0f;
             continue;  // Skip to the next PID if the request fails
         }
         else{
             ESP_LOGI("CAN_loop", "Successfully requested PID %d data.", (*pid_list)[i]->PID_index);
+            if(func_caller) {
+                func_caller((*pid_list)[i]);  // Call the function pointer if it is not NULL
+            }
         if ((*pid_list)[i]->f_gen_func != NULL || (*pid_list)[i]->i_gen_func != NULL) {
             switch ((*pid_list)[i]->is_float)
             {
@@ -243,10 +246,10 @@ esp_err_t CAN_loop(CAN_Data_handler *car_settings, PID_data ***pid_list, uint8_t
                 (*pid_list)[i]->f_data += car_settings->receiver_node.data[j + 3];  // Copy the data directly if no gen_func is defined
             }
         }
-        else{
+             else{
             ESP_LOGE("Can loop", "Pid has no return bytes (setting to 00)");
             (*pid_list)[i]->f_data = 0.0f;
-        }
+             }
         }
     }
 }
@@ -284,3 +287,19 @@ if (pid == NULL) {
     return ESP_OK;  // Return success after printing all PIDs
 }
 
+esp_err_t CAN_find_PID(PID_data ***pid_list, uint8_t pid, uint8_t pid_size, uint8_t *ret_index){
+    if (pid_list == NULL || pid_size == NULL || ret_index == NULL || pid == 0) {
+        ESP_LOGE("CAN_find_PID", "Invalid parameters: pid_list or ret_index is NULL.");
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    for (uint8_t i = 0; i < pid_size; i++) {
+       if( (*pid_list)[i]->PID_index == pid ){
+            *ret_index = i;  // Set the index of the found PID
+            ESP_LOGI("CAN_find_PID", "Found PID %d at index %d", pid, i);
+            return ESP_OK;  // Return success if PID is found
+        }
+       }  
+    return ESP_ERR_NOT_FOUND;  // Return error if PID is not found
+
+}

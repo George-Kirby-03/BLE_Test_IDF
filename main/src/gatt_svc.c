@@ -48,13 +48,23 @@ esp_err_t BLE_pass_PID(PID_data ***can_pid_list, uint8_t can_list_size){
     return ESP_OK;
 }
 
+typedef struct {
+    uint16_t handle; /**< Attribute handle */
+    struct 
+        {
+            uint8_t is_notify: 1;   /**< Indicates if the PID is available */
+            uint8_t is_indicate: 1;        /**< Reserved bits for future use */
+            uint8_t reserved: 6;        /**< Reserved bits for future use */
+        };
+} list_uuid_info_t;
+
 static struct ble_gatt_chr_def* uids = NULL;
-uint8_t *indexes = NULL;
+static list_uuid_info_t* attr_handles = NULL;
 
 esp_err_t gen_func(void){
     struct ble_gatt_chr_def *chr_list = malloc((list_size + 1) * sizeof(struct ble_gatt_chr_def));
     heart_rate_chr_val_handle = malloc((list_size + 1) * sizeof(uint16_t));
-   // indexes = malloc(list_size * sizeof(uint8_t));
+    attr_handles = malloc(list_size * sizeof(list_uuid_info_t));
     heart_rate_chr_val_handle[list_size] = 0;    
     if (chr_list == NULL) {
         ESP_LOGE("gen_func", "Failed to allocate memory for characteristic list.");
@@ -73,7 +83,7 @@ esp_err_t gen_func(void){
         chr_list[i] = (struct ble_gatt_chr_def){
             .uuid = &uuid->u,
             .access_cb = heart_rate_chr_access,
-            .arg = (void*)i,
+            .arg = (void*)(uint32_t)i,
             .flags = BLE_GATT_CHR_F_READ | BLE_GATT_CHR_F_NOTIFY,
             .min_key_size = 0,
             .val_handle = &heart_rate_chr_val_handle[i],
@@ -134,7 +144,7 @@ static int heart_rate_chr_access(uint16_t conn_handle, uint16_t attr_handle,
             }
         } */
 
-        uint8_t index = (uint8_t)arg;
+        uint32_t index = (uint32_t)arg;
         ESP_LOGI(TAG, "sENDING DATA of PID=%d value=%f",
                      pid_list[index]->PID_index, pid_list[index]->f_data);
 
@@ -171,19 +181,21 @@ error:
         "unexpected access operation to heart rate characteristic, opcode: %d",
         ctxt->op);
     return BLE_ATT_ERR_UNLIKELY;
-}
+} 
 
 
 /* Public functions */
-void send_heart_rate_indication(void) {
-    if (heart_rate_notifiy_status && heart_rate_chr_conn_handle_inited) {
-        int rc = ble_gatts_notify(heart_rate_chr_conn_handle,pid_attr_handle);
-if (rc != 0) {
-    ESP_LOGW("HRM", "Notify failed: %d", rc);
-}
+esp_err_t BLE_send_PID_notification(PID_data* pid_data) {
+    if (attr_handles[pid_data->PID_index].is_notify) {
+        int rc = ble_gatts_notify(heart_rate_chr_conn_handle,attr_handles[pid_data->PID_index].handle);
+        if (rc != 0) {
+             ESP_LOGW("HRM", "Notify failed: %d", rc);
+                return ESP_FAIL;
+        }
 
-        ESP_LOGI(TAG, "heart rate notifiaction sent!, PID: %d", pid_attr_handle);
+        ESP_LOGI(TAG, "heart rate notifiaction sent!, PID: %d", attr_handles[pid_data->PID_index].handle);
     }
+    return ESP_OK;
 }
 
 
@@ -196,29 +208,36 @@ if (rc != 0) {
 void gatt_svr_register_cb(struct ble_gatt_register_ctxt *ctxt, void *arg) {
     /* Local variables */
     char buf[BLE_UUID_STR_LEN];
-
+    uint8_t index = 0;
     /* Handle GATT attributes register events */
     switch (ctxt->op) {
 
     /* Service register event */
     case BLE_GATT_REGISTER_OP_SVC:
-        ESP_LOGD(TAG, "registered service %s with handle=%d",
+        ESP_LOGI(TAG, "registered service %s with handle=%d",
                  ble_uuid_to_str(ctxt->svc.svc_def->uuid, buf),
                  ctxt->svc.handle);
+
         break;
 
     /* Characteristic register event */
     case BLE_GATT_REGISTER_OP_CHR:
-        ESP_LOGD(TAG,
+        ESP_LOGI(TAG,
                  "registering characteristic %s with "
                  "def_handle=%d val_handle=%d",
                  ble_uuid_to_str(ctxt->chr.chr_def->uuid, buf),
                  ctxt->chr.def_handle, ctxt->chr.val_handle);
+        if (CAN_find_PID(&pid_list, ble_uuid_u16(ctxt->chr.chr_def->uuid), list_size, &index) == ESP_OK) {
+            ESP_LOGI(TAG, "Found PID %d at index %d", ble_uuid_u16(ctxt->chr.chr_def->uuid), index);
+            attr_handles[index].handle = ctxt->chr.val_handle; // Store the handle
+        } else {
+            ESP_LOGE(TAG, "PID not found for UUID %s", ble_uuid_to_str(ctxt->chr.chr_def->uuid, buf));
+        }        
         break;
 
     /* Descriptor register event */
     case BLE_GATT_REGISTER_OP_DSC:
-        ESP_LOGD(TAG, "registering descriptor %s with handle=%d",
+        ESP_LOGI(TAG, "registering descriptor %s with handle=%d",
                  ble_uuid_to_str(ctxt->dsc.dsc_def->uuid, buf),
                  ctxt->dsc.handle);
         break;
@@ -247,11 +266,19 @@ void gatt_svr_subscribe_cb(struct ble_gap_event *event) {
     /* Check attribute handle */
  //   if (event->subscribe.attr_handle == heart_rate_chr_val_handle) {
         /* Update heart rate subscription status */
-        pid_attr_handle = event->subscribe.attr_handle;
-        heart_rate_chr_conn_handle = event->subscribe.conn_handle;
-        heart_rate_chr_conn_handle_inited = true;
-        heart_rate_ind_status = event->subscribe.cur_indicate;
-        heart_rate_notifiy_status = event->subscribe.cur_notify;
+        for(uint8_t i = 0; i < list_size; i++) {
+            if (attr_handles[i].handle == event->subscribe.attr_handle) {
+                ESP_LOGI(TAG, "Found PID %d at index %d", attr_handles[i].handle, i);
+                attr_handles[i].is_notify = event->subscribe.cur_notify;
+                attr_handles[i].is_indicate = event->subscribe.cur_indicate;    
+                break;
+            }
+        }
+       // pid_attr_handle = event->subscribe.attr_handle;
+      //  heart_rate_chr_conn_handle = event->subscribe.conn_handle;
+     //   heart_rate_chr_conn_handle_inited = true;
+     //   heart_rate_ind_status = event->subscribe.cur_indicate;
+     //   heart_rate_notifiy_status = event->subscribe.cur_notify;
   //  }
      
 }

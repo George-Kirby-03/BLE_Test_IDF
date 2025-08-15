@@ -15,13 +15,14 @@
 #include "host/ble_gap.h"
 #include "canPID.h"
 /* Public function declarations */
-void send_heart_rate_indication(void);
+
 void gatt_svr_register_cb(struct ble_gatt_register_ctxt *ctxt, void *arg);
 void gatt_svr_subscribe_cb(struct ble_gap_event *event);
 int gatt_svc_init(void);
 esp_err_t gen_func(void);
 esp_err_t BLE_CAN_find_PID(PID_data ***pid_list, uint8_t pid, uint8_t *ret_index);
 esp_err_t BLE_pass_PID(PID_data ***can_pid_list, uint8_t can_list_size); //warning, due to size, this is not copied
+esp_err_t BLE_send_PID_notification(PID_data* pid_data);
 
 
 #endif // GATT_SVR_H
