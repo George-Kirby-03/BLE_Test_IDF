@@ -12,16 +12,19 @@ esp_err_t CAN_request(CAN_Data_handler *car_settings, uint8_t *data_send, uint8_
         ESP_LOGE("PID_data_init", "Failed to transmit initial message.");
         return ESP_FAIL;
     }
+    ESP_LOGI("CAN_init", "Sending values: %02X, %02X, %02X", car_settings->sender_node.data[0], car_settings->sender_node.data[1],
+car_settings->sender_node.data[3]);
 
     TickType_t startTick = xTaskGetTickCount();
 
     while (xTaskGetTickCount() - startTick < pdMS_TO_TICKS(timeout)) {
-
+       
         if (twai_receive(&(car_settings->receiver_node), pdMS_TO_TICKS(1000)) != ESP_OK) {
             ESP_LOGE("PID_data_init", "Failed to receive initial message.");
             return ESP_FAIL;
         }
-
+         ESP_LOGI("CAN_init", "Returned values: %02X, %02X, %02X", car_settings->receiver_node.data[0], car_settings->receiver_node.data[1],
+car_settings->receiver_node.data[3]);
         // Compare received data with expected data using the mask
         uint64_t actual = 0, expected = 0;
         for (int i = 0; i < mask_size; i++) {
@@ -151,6 +154,8 @@ if (car_settings->is_set == 0) {
 else {
 car_settings->is_extended = car_settings->sender_node.extd; // Set the is_extended flag based on the message format
 ESP_LOGI("CAN_init", "YAYYY, CAN bus initialized successfully with %s frame format", car_settings->is_extended ? "extended" : "standard");
+ESP_LOGI("CAN_init", "Returned values: %02X, %02X, %02X", car_settings->receiver_node.data[0], car_settings->receiver_node.data[1],
+car_settings->receiver_node.data[3]);
 }
 return ESP_OK;
 }
@@ -161,7 +166,7 @@ esp_err_t PID_data_init(PID_data *programed_pids, PID_data ***pid_list, uint8_t 
 
     memcpy(car_settings->sender_node.data, CAN_PID_REQUEST(0x00), sizeof(CAN_PID_REQUEST(0x00))); // Create data request to find PIDs
 
-    if(CAN_request(car_settings, CAN_PID_REQUEST(0x00), (uint8_t[]){0x00, 0x41, 0x00}, 3, 0b0, pdMS_TO_TICKS(3000)) != ESP_OK) {
+    if(CAN_request(car_settings, CAN_PID_REQUEST(0x00), (uint8_t[]){0x00, 0x41, 0x00}, 3, 0b0100000100000000, pdMS_TO_TICKS(3000)) != ESP_OK) {
         ESP_LOGE("PID_data_init", "Failed to request PID data.");
         return ESP_FAIL;  // Return error if request fails
     }
@@ -169,6 +174,7 @@ esp_err_t PID_data_init(PID_data *programed_pids, PID_data ***pid_list, uint8_t 
     uint32_t pid_count = 0;
     uint8_t pid_bytes = car_settings->receiver_node.data[0] - 2;  // Get the number of PID bytes from the response
     ESP_LOGI("PID_data_init", "data[0]: %02X", car_settings->receiver_node.data[0]);
+    ESP_LOGI("PID_data_init", "data[1]: %02X", car_settings->receiver_node.data[1]);
     for (uint8_t i = 0; i < car_settings->receiver_node.data[0] - 2; i++) {
          ESP_LOGI("PID_data_init", "Loop %d", i);
         pid_count |= car_settings->receiver_node.data[i + 3] << (24 - (i * 8));  // Combine the PID bytes into a single value

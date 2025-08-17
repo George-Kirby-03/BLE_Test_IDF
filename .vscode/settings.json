@@ -72,5 +72,5 @@
     "typeinfo": "c"
   },
   "idf.flashType": "UART",
-  "idf.portWin": "COM7"
+  "idf.portWin": "COM6"
 }
