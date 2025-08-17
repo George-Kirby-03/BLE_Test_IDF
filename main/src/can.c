@@ -8,7 +8,7 @@ esp_err_t CAN_request(CAN_Data_handler *car_settings, uint8_t *data_send, uint8_
     
     memcpy(car_settings->sender_node.data, data_send, 8); // Copy the request data into the sender node
     ESP_LOGI("CAN_init", "Sending values: %02X, %02X, %02X", car_settings->sender_node.data[0], car_settings->sender_node.data[1],
-    car_settings->sender_node.data[3]);
+    car_settings->sender_node.data[2]);
     
     uint64_t actual = 0, expected = 0;
 
@@ -19,7 +19,7 @@ esp_err_t CAN_request(CAN_Data_handler *car_settings, uint8_t *data_send, uint8_
     }    
 
     if (twai_transmit(&(car_settings->sender_node), pdMS_TO_TICKS(1000)) != ESP_OK) {
-        ESP_LOGE("PID_data_init", "Failed to transmit initial message.");
+        ESP_LOGE("CAN_request", "Failed to transmit initial message.");
         return ESP_FAIL;
     }
 
@@ -27,11 +27,11 @@ esp_err_t CAN_request(CAN_Data_handler *car_settings, uint8_t *data_send, uint8_
     while (xTaskGetTickCount() - startTick < pdMS_TO_TICKS(timeout)) {
        
         if (twai_receive(&(car_settings->receiver_node), pdMS_TO_TICKS(1000)) != ESP_OK) {
-            ESP_LOGE("PID_data_init", "Failed to receive initial message.");
+            ESP_LOGE("CAN_request", "Failed to receive initial messageee.");
             return ESP_FAIL;
         }
         ESP_LOGI("CAN_init", "Returned values: %02X, %02X, %02X", car_settings->receiver_node.data[0], car_settings->receiver_node.data[1],
-        car_settings->receiver_node.data[3]);
+        car_settings->receiver_node.data[2]);
 
         for (int i = 0; i < mask_size; i++) {
             actual |= ((uint64_t)car_settings->receiver_node.data[i]) << (24 - (i * 8));
@@ -50,24 +50,22 @@ esp_err_t CAN_request(CAN_Data_handler *car_settings, uint8_t *data_send, uint8_
 esp_err_t CAN_request_pid(CAN_Data_handler *car_settings, PID_data *element, TickType_t timeout) {
     
     memcpy(car_settings->sender_node.data, CAN_PID_REQUEST(element->PID_index), 8); // Copy the request data into the sender node
-
+     TickType_t startTick = xTaskGetTickCount();
     if (twai_transmit(&(car_settings->sender_node), pdMS_TO_TICKS(1000)) != ESP_OK) {
-        ESP_LOGE("PID_data_init", "Failed to transmit initial message.");
+        ESP_LOGE("CAN_request_pid", "Failed to transmit initial message.");
         return ESP_FAIL;
     }
-
-    TickType_t startTick = xTaskGetTickCount();
     while (xTaskGetTickCount() - startTick < pdMS_TO_TICKS(timeout)) {
 
-        if (twai_receive(&(car_settings->receiver_node), pdMS_TO_TICKS(1000)) != ESP_OK) {
-            ESP_LOGE("PID_data_init", "Failed to receive initial message.");
+        if (twai_receive(&(car_settings->receiver_node), pdMS_TO_TICKS(2000)) != ESP_OK) {
+            ESP_LOGE("CAN_request_pid", "Failed to receive initial message.");
             return ESP_FAIL;
         }
 
-        if (element->PID_index == car_settings->receiver_node.data[2]) {
+        if (element->PID_index == car_settings->receiver_node.data[2]  &&  car_settings->receiver_node.data[1] == 0x41) {
             return ESP_OK;  // Return early if the PID index matches
         } else {
-            ESP_LOGW("PID_data_init", "Received wrong message, waiting... ");
+            ESP_LOGW("CAN_request_pid", "Received wrong message, waiting... ");
         }
     }
     return ESP_ERR_TIMEOUT;  // Timeout if no valid response
@@ -105,7 +103,7 @@ esp_err_t CAN_init(CAN_Data_handler *car_settings, twai_timing_config_t *t_confi
                 if(res == ESP_OK) {
                    if (alerts & TWAI_ALERT_TX_SUCCESS) {
                          ESP_LOGI("CAN_init", "Message sent successfully");
-                        if (CAN_request_pid(car_settings,&(PID_data)CAN_PID_LIST_INT(0, NULL, ""), 3000)) {
+                        if (CAN_request_pid(car_settings,&(PID_data)CAN_PID_LIST_INT(0, NULL, ""), 3000) == ESP_OK) {
                                ESP_LOGI("CAN_init", "Message received successfully");
                                car_settings->is_set = 1; // Set the is_set flag to indicate CAN bus is set up
                                break;
@@ -158,7 +156,7 @@ else {
 car_settings->is_extended = car_settings->sender_node.extd; // Set the is_extended flag based on the message format
 ESP_LOGI("CAN_init", "YAYYY, CAN bus initialized successfully with %s frame format", car_settings->is_extended ? "extended" : "standard");
 ESP_LOGI("CAN_init", "Returned values: %02X, %02X, %02X", car_settings->receiver_node.data[0], car_settings->receiver_node.data[1],
-car_settings->receiver_node.data[3]);
+car_settings->receiver_node.data[2]);
 }
 return ESP_OK;
 }
@@ -169,10 +167,15 @@ esp_err_t PID_data_init(PID_data *programed_pids, PID_data ***pid_list, uint8_t 
 
     memcpy(car_settings->sender_node.data, CAN_PID_REQUEST(0x00), sizeof(CAN_PID_REQUEST(0x00))); // Create data request to find PIDs
 
-    if(CAN_request(car_settings, CAN_PID_REQUEST(0x00), (uint8_t[]){0xff, 0x41, 0x00}, 3, 0x00FFFF, 3000) != ESP_OK) {
+    /* if(CAN_request(car_settings, CAN_PID_REQUEST(0x00), (uint8_t[]){0xff, 0x41, 0x00}, 3, 0x00FFFF, 3000) != ESP_OK) {
+        ESP_LOGE("PID_data_init", "Failed to request PID data.");
+        return ESP_FAIL;  // Return error if request fails
+    } */
+    if(CAN_request_pid(car_settings,&(PID_data)CAN_PID_LIST_INT(0, NULL, ""), 3000) != ESP_OK) {
         ESP_LOGE("PID_data_init", "Failed to request PID data.");
         return ESP_FAIL;  // Return error if request fails
     }
+    
     uint32_t pid_count = 0;
     uint8_t pid_bytes = (car_settings->receiver_node.data[0] > 2) ? car_settings->receiver_node.data[0] - 2 : 0;  // Get the number of PID bytes from the response
     ESP_LOGI("PID_data_init", "data[0]: %02X", car_settings->receiver_node.data[0]);

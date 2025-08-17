@@ -62,9 +62,9 @@ static struct ble_gatt_chr_def* uids = NULL;
 static list_uuid_info_t* attr_handles = NULL;
 
 esp_err_t gen_func(void){
-    struct ble_gatt_chr_def *chr_list = malloc((list_size + 1) * sizeof(struct ble_gatt_chr_def));
-    heart_rate_chr_val_handle = malloc((list_size + 1) * sizeof(uint16_t));
-    attr_handles = malloc(list_size * sizeof(list_uuid_info_t));
+    struct ble_gatt_chr_def *chr_list = calloc((list_size + 1), sizeof(struct ble_gatt_chr_def));
+    heart_rate_chr_val_handle = calloc((list_size + 1), sizeof(uint16_t));
+    attr_handles = calloc(list_size, sizeof(list_uuid_info_t));
     heart_rate_chr_val_handle[list_size] = 0;    
     if (chr_list == NULL) {
         ESP_LOGE("gen_func", "Failed to allocate memory for characteristic list.");
