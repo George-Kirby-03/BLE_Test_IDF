@@ -58,7 +58,6 @@ struct PID_data
         {
             uint8_t is_available: 1;   /**< Indicates if the PID is available */
             uint8_t is_float: 1;        /**< Reserved bits for future use */
-
             uint8_t reserved: 5;        /**< Reserved bits for future use */
         };
 };
@@ -74,7 +73,6 @@ typedef struct {
 } CAN_Data_handler;
 
 typedef esp_err_t (*completed_read_func)(PID_data *pid_data);
-
 
 // Macro for safe function pointer calls
 // #define SAFE_CALL(func_ptr) ((func_ptr) ? (func_ptr)() : doNothing())

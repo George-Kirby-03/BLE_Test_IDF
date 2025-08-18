@@ -43,7 +43,7 @@ esp_err_t CAN_request(CAN_Data_handler *car_settings, uint8_t *data_send, uint8_
             ESP_LOGW("PID_data_init", "Data not matching, waiting...");
         }
     }
-    ESP_LOGW("PID_data_init", "Could not find data in given time");
+    ESP_LOGE("PID_data_init", "Could not find data in given time");
     return ESP_ERR_TIMEOUT;  // Timeout if no valid response
 }
 
@@ -94,7 +94,7 @@ esp_err_t CAN_init(CAN_Data_handler *car_settings, twai_timing_config_t *t_confi
         ESP_LOGI("CAN_init(alert reconfig)", "Alerts reconfigured");
             } else {
         ESP_LOGE("CAN_init(alert reconfig)", "Failed to reconfigure alerts");
-        break;;
+        break;
         }
         twai_start();
         }
@@ -194,18 +194,18 @@ esp_err_t PID_data_init(PID_data *programed_pids, PID_data ***pid_list, uint8_t 
    uint8_t index = 0;
    for (uint8_t i = 0; i < pid_bytes*8; i++) {
     ESP_LOGI("PID_data_init", "Iterating bits (%d)", i);
-        if (pid_count & (1 << (31 - i))) {
+        if (pid_count & (0b1 << (31 - i))) {
             uint8_t list_inc = 0;
             while(1){
                  if (programed_pids[list_inc].f_gen_func == NULL && programed_pids[list_inc].i_gen_func == NULL) {
-                 ESP_LOGE("PID_data_init", "PID has no gen_func, stopping set PIDS");
+                 ESP_LOGE("PID_data_init", "PID %d list does not have an entry in provided list, creating plane entry", i+1);
                  (*pid_list)[index] = malloc(sizeof(PID_data));
                  *((*pid_list)[index]) = (PID_data){CAN_PID_EMPTY_PID(i+1)};  // Set the PID index
                  break;
                   }
                   else if (programed_pids[list_inc].PID_index == i+1) {
                     (*pid_list)[index] = &programed_pids[list_inc];  // Point to the existing PID_data
-                    ESP_LOGI("PID_data_init", "FOUND PID %d, setting gen_func", i+1);
+                    ESP_LOGE("PID_data_init", "FOUND PID %d in provided list, setting gen_func", i+1);
                   break;
                   }
                   else {
@@ -229,16 +229,13 @@ esp_err_t CAN_loop(CAN_Data_handler *car_settings, PID_data ***pid_list, uint8_t
 
     for (uint8_t i = 0; i < pid_list_count; i++) {
         // Request the PID data
-        if (CAN_request_pid(car_settings, ((*pid_list)[i]), pdMS_TO_TICKS(3000)) != ESP_OK) {
+        if (CAN_request_pid(car_settings, ((*pid_list)[i]), 3000) != ESP_OK) {
             ESP_LOGE("CAN_loop", "Failed to request PID %d data.", (*pid_list)[i]->PID_index);
            // (*pid_list)[i]->f_data = 3.0f;
             continue;  // Skip to the next PID if the request fails
         }
         else{
             ESP_LOGI("CAN_loop", "Successfully requested PID %d data.", (*pid_list)[i]->PID_index);
-            if(func_caller) {
-                func_caller((*pid_list)[i]);  // Call the function pointer if it is not NULL
-            }
         if ((*pid_list)[i]->f_gen_func != NULL || (*pid_list)[i]->i_gen_func != NULL) {
             switch ((*pid_list)[i]->is_float)
             {
@@ -263,6 +260,9 @@ esp_err_t CAN_loop(CAN_Data_handler *car_settings, PID_data ***pid_list, uint8_t
              }
         }
     }
+            if(func_caller) {
+                func_caller((*pid_list)[i]);  // Call the function pointer if it is not NULL
+            }    
 }
     return ESP_OK;  
 }
